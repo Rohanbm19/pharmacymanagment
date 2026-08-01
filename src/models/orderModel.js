@@ -112,7 +112,36 @@ const placeOrder = async (userId, medicineList) => {
     }
 
 };
+const getOrderDetails = async (orderId) => {
+
+    const query = `
+        SELECT
+            o.id AS order_id,
+            o.user_id,
+            o.total_price,
+            o.order_date,
+            m.name,
+            oi.quantity,
+            m.price
+        FROM orders o
+        JOIN order_items oi
+            ON o.id = oi.order_id
+        JOIN medicines m
+            ON oi.medicine_id = m.id
+        WHERE o.id = $1;
+    `;
+
+    const result = await pool.query(query, [orderId]);
+
+    if (result.rows.length === 0) {
+        return null;
+    }
+
+    return result.rows;
+
+};
 
 module.exports = {
-    placeOrder
+    placeOrder,
+    getOrderDetails
 };

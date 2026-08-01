@@ -32,7 +32,37 @@ const placeOrder = async (req, res) => {
     }
 
 };
+const getOrderDetails = async (req, res) => {
+
+    try {
+
+        const id = req.params.id;
+
+        const order = await orderModel.getOrderDetails(id);
+
+        if (!order) {
+
+            return res.status(404).json({
+                message: "Order Not Found"
+            });
+
+        }
+
+        res.json(order);
+
+    } catch (error) {
+
+        console.log(error);
+
+        res.status(500).json({
+            message: "Server Error"
+        });
+
+    }
+
+};
 
 module.exports = {
-    placeOrder
+    placeOrder,
+    getOrderDetails
 };
