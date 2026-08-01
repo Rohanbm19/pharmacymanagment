@@ -19,7 +19,20 @@ const updateStock = async (id, stock) => {
     await pool.query(query, [stock, id]);
 };
 
+const getMedicines = async () => {
+
+    const query = `
+        SELECT * FROM medicines
+        ORDER BY id;
+    `;
+
+    const result = await pool.query(query);
+
+    return result.rows;
+
+};
 module.exports = {
     addMedicine,
-    updateStock
+    updateStock,
+    getMedicines
 };
