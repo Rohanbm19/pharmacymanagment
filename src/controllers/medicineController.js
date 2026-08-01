@@ -41,10 +41,17 @@ const updateStock = async (req, res) => {
 
         await medicineModel.updateStock(id, stock);
 
-        if (stock < 10) {
-            console.log("⚠ LOW STOCK ALERT!");
-        }
+       if (stock < 10) {
 
+    console.log("⚠ LOW STOCK ALERT!");
+
+    global.io.emit("lowStock", {
+        message: "Medicine stock is below 10",
+        medicineId: id,
+        stock: stock
+    });
+
+}
         res.json({
             message: "Stock updated successfully"
         });
