@@ -1,17 +1,11 @@
-const express = require('express');
-const medicineRoutes = require('./routes/medicineRoutes');
-const orderRoutes = require('./routes/orderRoutes');
-const aiRoutes = require('./routes/aiRoutes');
-const { errorHandler } = require('./middleware/errorHandler');
+const express = require("express");
 
 const app = express();
 
 app.use(express.json());
 
-app.use('/api/medicines', medicineRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/ai', aiRoutes);
+const medicineRoutes = require("./routes/medicineRoutes");
 
-app.use(errorHandler);
+app.use("/api/medicines", medicineRoutes);
 
 module.exports = app;
