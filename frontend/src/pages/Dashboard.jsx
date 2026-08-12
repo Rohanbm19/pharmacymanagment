@@ -1,0 +1,255 @@
+import { useState, useEffect } from 'react';
+import { getMedicines } from '../services/api';
+import { ShoppingBag, ShoppingCart, Pill, AlertCircle } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+
+// Mock Data for Charts
+const salesData = [
+  { name: 'May 25', uv: 10000 },
+  { name: 'May 26', uv: 22000 },
+  { name: 'May 27', uv: 16000 },
+  { name: 'May 28', uv: 32000 },
+  { name: 'May 29', uv: 48000 },
+  { name: 'May 30', uv: 26000 },
+  { name: 'May 31', uv: 28000 },
+];
+
+const topSellingData = [
+  { name: 'Paracetamol 650mg', value: 32, color: '#3b82f6' },
+  { name: 'Amoxicillin 500mg', value: 24, color: '#10b981' },
+  { name: 'Cetirizine 10mg', value: 18, color: '#8b5cf6' },
+  { name: 'Omeprazole 20mg', value: 14, color: '#f59e0b' },
+  { name: 'Others', value: 12, color: '#94a3b8' },
+];
+
+const mockRecentOrders = [
+  { id: '#ORD-2025-3210', customer: 'Rajesh Kumar', date: 'May 31, 2025', amount: 2450, status: 'Delivered' },
+  { id: '#ORD-2025-3209', customer: 'Priya Sharma', date: 'May 31, 2025', amount: 1230, status: 'Processing' },
+  { id: '#ORD-2025-3208', customer: 'Amit Singh', date: 'May 30, 2025', amount: 3560, status: 'Shipped' },
+  { id: '#ORD-2025-3207', customer: 'Neha Verma', date: 'May 30, 2025', amount: 850, status: 'Delivered' },
+  { id: '#ORD-2025-3206', customer: 'Suresh Patel', date: 'May 29, 2025', amount: 1780, status: 'Cancelled' },
+];
+
+export default function Dashboard() {
+  const [medicines, setMedicines] = useState([]);
+  const [stats, setStats] = useState({
+    totalMedicines: 1245,
+    lowStock: 23,
+    totalSales: '1,24,580',
+    totalOrders: 320
+  });
+
+  useEffect(() => {
+    fetchMedicines();
+  }, []);
+
+  const fetchMedicines = async () => {
+    try {
+      const response = await getMedicines();
+      const meds = response.data;
+      setMedicines(meds);
+      
+      const totalMedicines = meds.length > 0 ? meds.length : 1245; // fallback to mock if empty
+      const lowStock = meds.filter(m => m.stock < 10).length || 23;
+      
+      setStats(prev => ({ ...prev, totalMedicines, lowStock }));
+    } catch (error) {
+      console.error('Failed to fetch dashboard stats', error);
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    switch(status) {
+      case 'Delivered': return <span className="badge badge-success">Delivered</span>;
+      case 'Processing': return <span className="badge badge-info">Processing</span>;
+      case 'Shipped': return <span className="badge badge-warning">Shipped</span>;
+      case 'Cancelled': return <span className="badge badge-danger">Cancelled</span>;
+      default: return <span className="badge">{status}</span>;
+    }
+  };
+
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-title">
+          <h1>Dashboard</h1>
+          <p>Welcome back! Here's what's happening with your pharmacy.</p>
+        </div>
+        <div style={{ backgroundColor: 'white', padding: '8px 16px', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '0.9rem', fontWeight: '500' }}>
+          📅 May 25 - May 31, 2025
+        </div>
+      </div>
+      
+      <div className="stat-cards-grid">
+        <div className="stat-card">
+          <div className="icon-box icon-blue"><ShoppingBag size={24} /></div>
+          <div className="stat-content">
+            <div className="stat-label">Total Sales</div>
+            <div className="stat-value">₹{stats.totalSales}</div>
+            <div className="stat-trend trend-up">↑ 18.2% <span className="text-muted" style={{marginLeft: '4px'}}>vs last week</span></div>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="icon-box icon-green"><ShoppingCart size={24} /></div>
+          <div className="stat-content">
+            <div className="stat-label">Total Orders</div>
+            <div className="stat-value">{stats.totalOrders}</div>
+            <div className="stat-trend trend-up">↑ 12.5% <span className="text-muted" style={{marginLeft: '4px'}}>vs last week</span></div>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="icon-box icon-purple"><Pill size={24} /></div>
+          <div className="stat-content">
+            <div className="stat-label">Total Medicines</div>
+            <div className="stat-value">{stats.totalMedicines}</div>
+            <div className="stat-trend trend-up">↑ 8.4% <span className="text-muted" style={{marginLeft: '4px'}}>vs last week</span></div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="icon-box icon-orange"><AlertCircle size={24} /></div>
+          <div className="stat-content">
+            <div className="stat-label">Low Stock Items</div>
+            <div className="stat-value">{stats.lowStock}</div>
+            <div className="stat-trend trend-down">↓ 5.1% <span className="text-muted" style={{marginLeft: '4px'}}>vs last week</span></div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="dashboard-layout">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Sales Chart */}
+          <div className="card">
+            <div className="section-header">
+              <h2 className="section-title">Sales Overview</h2>
+              <select style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                <option>This Week</option>
+                <option>This Month</option>
+              </select>
+            </div>
+            <div style={{ height: '250px', width: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={salesData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={val => '₹' + (val/1000) + 'k'} />
+                  <RechartsTooltip />
+                  <Line type="monotone" dataKey="uv" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Recent Orders */}
+          <div className="card" style={{ padding: '0' }}>
+            <div className="section-header" style={{ padding: '24px 24px 0 24px' }}>
+              <h2 className="section-title">Recent Orders</h2>
+              <a href="/orders" style={{ color: 'var(--primary)', fontSize: '0.9rem', textDecoration: 'none', fontWeight: '500' }}>View All Orders</a>
+            </div>
+            <div className="table-container" style={{ border: 'none', boxShadow: 'none' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Order ID</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mockRecentOrders.map((order, i) => (
+                    <tr key={i}>
+                      <td className="font-semibold text-muted">{order.id}</td>
+                      <td className="font-semibold">{order.customer}</td>
+                      <td className="text-muted">{order.date}</td>
+                      <td>₹{order.amount}</td>
+                      <td>{getStatusBadge(order.status)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Low Stock Alert */}
+          <div className="card">
+            <div className="section-header">
+              <h2 className="section-title">Low Stock Alert</h2>
+              <a href="/inventory" style={{ color: 'var(--primary)', fontSize: '0.9rem', textDecoration: 'none', fontWeight: '500' }}>View All</a>
+            </div>
+            <div>
+              {/* Mocking low stock items to match design */}
+              <div className="list-item">
+                <div style={{ width: '32px', height: '32px', backgroundColor: '#fff7ed', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px', color: '#ea580c' }}><Pill size={16}/></div>
+                <div style={{ flex: 1 }}>
+                  <div className="font-semibold" style={{ fontSize: '0.95rem' }}>Amoxicillin 500mg</div>
+                  <div className="text-muted text-sm">Antibiotic</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: '#dc2626', fontWeight: '600', fontSize: '0.9rem' }}>Stock: 4</div>
+                  <div className="text-muted" style={{ fontSize: '0.8rem' }}>Min: 10</div>
+                </div>
+              </div>
+              <div className="list-item">
+                <div style={{ width: '32px', height: '32px', backgroundColor: '#eff6ff', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px', color: '#3b82f6' }}><Pill size={16}/></div>
+                <div style={{ flex: 1 }}>
+                  <div className="font-semibold" style={{ fontSize: '0.95rem' }}>Paracetamol 650mg</div>
+                  <div className="text-muted text-sm">Tablet</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: '#dc2626', fontWeight: '600', fontSize: '0.9rem' }}>Stock: 6</div>
+                  <div className="text-muted" style={{ fontSize: '0.8rem' }}>Min: 15</div>
+                </div>
+              </div>
+              <div className="list-item" style={{ borderBottom: 'none' }}>
+                <div style={{ width: '32px', height: '32px', backgroundColor: '#fdf2f8', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px', color: '#db2777' }}><Pill size={16}/></div>
+                <div style={{ flex: 1 }}>
+                  <div className="font-semibold" style={{ fontSize: '0.95rem' }}>Cetirizine 10mg</div>
+                  <div className="text-muted text-sm">Antihistamine</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: '#dc2626', fontWeight: '600', fontSize: '0.9rem' }}>Stock: 7</div>
+                  <div className="text-muted" style={{ fontSize: '0.8rem' }}>Min: 10</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Top Selling */}
+          <div className="card">
+            <div className="section-header">
+              <h2 className="section-title">Top Selling Medicines</h2>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', height: '200px' }}>
+              <div style={{ width: '50%', height: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={topSellingData} innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value">
+                      {topSellingData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ width: '50%', paddingLeft: '16px' }}>
+                {topSellingData.map((item, index) => (
+                  <div key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', fontSize: '0.85rem' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: item.color, marginRight: '8px' }}></div>
+                    <div style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-muted)' }}>{item.name}</div>
+                    <div className="font-semibold">{item.value}%</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,14 @@
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: 'http://localhost:5000/api', // You can use import.meta.env.VITE_API_URL if configured
+});
+
+export const getMedicines = () => api.get('/medicines');
+export const addMedicine = (data) => api.post('/medicines', data);
+export const updateStock = (id, stock) => api.put(`/medicines/${id}/stock`, { stock });
+
+export const placeOrder = (userId, items) => api.post('/orders', { userId, medicineList: items });
+export const getOrderDetails = (id) => api.get(`/orders/${id}`);
+
+export default api;
