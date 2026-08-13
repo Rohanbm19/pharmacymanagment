@@ -7,6 +7,8 @@ const api = axios.create({
 export const getMedicines = () => api.get('/medicines');
 export const addMedicine = (data) => api.post('/medicines', data);
 export const updateStock = (id, stock) => api.put(`/medicines/${id}/stock`, { stock });
+export const deleteMedicine = (id) => api.delete(`/medicines/${id}`);
+export const updateMedicine = (id, data) => api.put(`/medicines/${id}`, data);
 
 export const placeOrder = (userId, items) => api.post('/orders', { userId, medicineList: items });
 export const getOrderDetails = (id) => api.get(`/orders/${id}`);

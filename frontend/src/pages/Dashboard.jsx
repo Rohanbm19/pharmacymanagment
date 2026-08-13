@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getMedicines } from '../services/api';
 import { ShoppingBag, ShoppingCart, Pill, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -31,6 +32,7 @@ const mockRecentOrders = [
 ];
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [medicines, setMedicines] = useState([]);
   const [stats, setStats] = useState({
     totalMedicines: 1245,
@@ -46,7 +48,7 @@ export default function Dashboard() {
   const fetchMedicines = async () => {
     try {
       const response = await getMedicines();
-      const meds = response.data;
+      const meds = response.data.medicines || response.data || [];
       setMedicines(meds);
       
       const totalMedicines = meds.length > 0 ? meds.length : 1245; // fallback to mock if empty
@@ -119,30 +121,7 @@ export default function Dashboard() {
       </div>
       
       <div className="dashboard-layout">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Sales Chart */}
-          <div className="card">
-            <div className="section-header">
-              <h2 className="section-title">Sales Overview</h2>
-              <select style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)' }}>
-                <option>This Week</option>
-                <option>This Month</option>
-              </select>
-            </div>
-            <div style={{ height: '250px', width: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={salesData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={val => '₹' + (val/1000) + 'k'} />
-                  <RechartsTooltip />
-                  <Line type="monotone" dataKey="uv" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Recent Orders */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>          {/* Recent Orders */}
           <div className="card" style={{ padding: '0' }}>
             <div className="section-header" style={{ padding: '24px 24px 0 24px' }}>
               <h2 className="section-title">Recent Orders</h2>
@@ -183,40 +162,22 @@ export default function Dashboard() {
               <a href="/inventory" style={{ color: 'var(--primary)', fontSize: '0.9rem', textDecoration: 'none', fontWeight: '500' }}>View All</a>
             </div>
             <div>
-              {/* Mocking low stock items to match design */}
-              <div className="list-item">
-                <div style={{ width: '32px', height: '32px', backgroundColor: '#fff7ed', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px', color: '#ea580c' }}><Pill size={16}/></div>
-                <div style={{ flex: 1 }}>
-                  <div className="font-semibold" style={{ fontSize: '0.95rem' }}>Amoxicillin 500mg</div>
-                  <div className="text-muted text-sm">Antibiotic</div>
+              {medicines.filter(m => m.stock < 10).map((med, idx, arr) => (
+                <div className="list-item" key={med.id || idx} style={idx === arr.length - 1 ? { borderBottom: 'none' } : {}}>
+                  <div style={{ width: '32px', height: '32px', backgroundColor: '#fff7ed', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px', color: '#ea580c' }}><Pill size={16}/></div>
+                  <div style={{ flex: 1 }}>
+                    <div className="font-semibold" style={{ fontSize: '0.95rem' }}>{med.name}</div>
+                    <div className="text-muted text-sm">{med.category}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    <div style={{ color: '#dc2626', fontWeight: '600', fontSize: '0.9rem' }}>Stock: {med.stock}</div>
+                    <button onClick={() => navigate('/inventory')} className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>Update</button>
+                  </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: '#dc2626', fontWeight: '600', fontSize: '0.9rem' }}>Stock: 4</div>
-                  <div className="text-muted" style={{ fontSize: '0.8rem' }}>Min: 10</div>
-                </div>
-              </div>
-              <div className="list-item">
-                <div style={{ width: '32px', height: '32px', backgroundColor: '#eff6ff', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px', color: '#3b82f6' }}><Pill size={16}/></div>
-                <div style={{ flex: 1 }}>
-                  <div className="font-semibold" style={{ fontSize: '0.95rem' }}>Paracetamol 650mg</div>
-                  <div className="text-muted text-sm">Tablet</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: '#dc2626', fontWeight: '600', fontSize: '0.9rem' }}>Stock: 6</div>
-                  <div className="text-muted" style={{ fontSize: '0.8rem' }}>Min: 15</div>
-                </div>
-              </div>
-              <div className="list-item" style={{ borderBottom: 'none' }}>
-                <div style={{ width: '32px', height: '32px', backgroundColor: '#fdf2f8', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px', color: '#db2777' }}><Pill size={16}/></div>
-                <div style={{ flex: 1 }}>
-                  <div className="font-semibold" style={{ fontSize: '0.95rem' }}>Cetirizine 10mg</div>
-                  <div className="text-muted text-sm">Antihistamine</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: '#dc2626', fontWeight: '600', fontSize: '0.9rem' }}>Stock: 7</div>
-                  <div className="text-muted" style={{ fontSize: '0.8rem' }}>Min: 10</div>
-                </div>
-              </div>
+              ))}
+              {medicines.filter(m => m.stock < 10).length === 0 && (
+                <div style={{ padding: '16px 0', color: 'var(--text-muted)', textAlign: 'center' }}>No low stock items!</div>
+              )}
             </div>
           </div>
 

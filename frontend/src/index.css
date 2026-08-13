@@ -29,6 +29,18 @@
   --radius-lg: 12px;
 }
 
+[data-theme="dark"] {
+  --bg-main: #0f172a;
+  --bg-sidebar: #1e293b;
+  --bg-card: #1e293b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border: #334155;
+  --secondary: #334155;
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getMedicines, addMedicine } from '../services/api';
+import { getMedicines, addMedicine, deleteMedicine, updateMedicine } from '../services/api';
+import { io } from 'socket.io-client';
 import { Plus, Pill, Search, Filter, Edit2, Trash2, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle, Package } from 'lucide-react';
 
 export default function Inventory() {
@@ -7,15 +8,38 @@ export default function Inventory() {
   const [stats, setStats] = useState({ total: 0, inStock: 0, lowStock: 0, outOfStock: 0 });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newMed, setNewMed] = useState({ name: '', category: '', stock: 0, price: 0 });
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editMed, setEditMed] = useState(null);
 
   useEffect(() => {
     fetchMedicines();
+
+    const socket = io('http://localhost:5000');
+
+    socket.on('connect', () => {
+      console.log('Socket connected:', socket.id);
+    });
+
+    socket.on('medicines:updated', (payload) => {
+      console.log('medicines:updated', payload);
+      fetchMedicines();
+    });
+
+    socket.on('lowStock', (payload) => {
+      console.warn('lowStock', payload);
+      fetchMedicines();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   const fetchMedicines = async () => {
     try {
       const response = await getMedicines();
-      const meds = response.data.map((med, i) => ({
+      const medsData = response.data.medicines || response.data || [];
+      const meds = medsData.map((med, i) => ({
         ...med,
         // Mock fields to match mockup
         company: ['Crocin', 'Cipla', 'Dr. Reddy\'s', 'Sun Pharma'][i % 4],
@@ -43,6 +67,40 @@ export default function Inventory() {
       fetchMedicines();
     } catch (error) {
       console.error('Error adding medicine', error);
+    }
+  };
+
+  const handleDeleteMedicine = async (id) => {
+    if (window.confirm("Are you sure you want to delete this medicine?")) {
+      try {
+        await deleteMedicine(id);
+        // server will emit update; fetch to be safe
+        fetchMedicines();
+      } catch (error) {
+        console.error('Error deleting medicine', error);
+      }
+    }
+  };
+
+  const handleEditClick = (med) => {
+    setEditMed({ ...med });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await updateMedicine(editMed.id, {
+        name: editMed.name,
+        category: editMed.category,
+        stock: editMed.stock,
+        price: editMed.price
+      });
+      setIsEditModalOpen(false);
+      setEditMed(null);
+      fetchMedicines();
+    } catch (error) {
+      console.error('Error updating medicine', error);
     }
   };
 
@@ -147,8 +205,8 @@ export default function Inventory() {
                 <td>{getStatusBadge(med.stock)}</td>
                 <td>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="btn-icon"><Edit2 size={16} /></button>
-                    <button className="btn-icon btn-icon-danger"><Trash2 size={16} /></button>
+                    <button className="btn-icon" onClick={() => handleEditClick(med)}><Edit2 size={16} /></button>
+                    <button className="btn-icon btn-icon-danger" onClick={() => handleDeleteMedicine(med.id)}><Trash2 size={16} /></button>
                   </div>
                 </td>
               </tr>
@@ -205,6 +263,36 @@ export default function Inventory() {
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                 <button type="button" className="btn btn-outline" onClick={() => setIsAddModalOpen(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Add Medicine</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isEditModalOpen && editMed && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" style={{ width: '400px', backgroundColor: 'white', padding: '32px' }}>
+            <h2 className="section-title" style={{ marginBottom: '24px' }}>Edit Medicine</h2>
+            <form onSubmit={handleEditSubmit}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Name</label>
+                <input type="text" required value={editMed.name} onChange={e => setEditMed({...editMed, name: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)' }} />
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Category</label>
+                <input type="text" required value={editMed.category} onChange={e => setEditMed({...editMed, category: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)' }} />
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Stock</label>
+                <input type="number" required value={editMed.stock} onChange={e => setEditMed({...editMed, stock: parseInt(e.target.value)})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)' }} />
+              </div>
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '8px', fontWeight: '500' }}>Price (₹)</label>
+                <input type="number" step="0.01" required value={editMed.price} onChange={e => setEditMed({...editMed, price: parseFloat(e.target.value)})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-outline" onClick={() => { setIsEditModalOpen(false); setEditMed(null); }}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Changes</button>
               </div>
             </form>
           </div>

@@ -19,6 +19,20 @@ const updateStock = async (id, stock) => {
     await pool.query(query, [stock, id]);
 };
 
+const updateMedicine = async (id, name, category, stock, price) => {
+    const query = `
+        UPDATE medicines
+        SET
+            name = COALESCE($1, name),
+            category = COALESCE($2, category),
+            stock = COALESCE($3, stock),
+            price = COALESCE($4, price)
+        WHERE id = $5
+    `;
+
+    await pool.query(query, [name, category, stock, price, id]);
+};
+
 const getMedicines = async () => {
 
     const query = `
@@ -31,8 +45,19 @@ const getMedicines = async () => {
     return result.rows;
 
 };
+
+const deleteMedicine = async (id) => {
+    const query = `
+        DELETE FROM medicines
+        WHERE id = $1
+    `;
+    await pool.query(query, [id]);
+};
+
 module.exports = {
     addMedicine,
     updateStock,
-    getMedicines
+    updateMedicine,
+    getMedicines,
+    deleteMedicine
 };

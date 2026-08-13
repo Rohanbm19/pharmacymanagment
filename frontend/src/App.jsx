@@ -1,13 +1,20 @@
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Pill, ShoppingCart, Activity, 
-  BarChart3, Users, Truck, Settings, Search, Bell, Moon 
+  BarChart3, Users, Truck, Settings, Search, Bell, Moon, Sun 
 } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Orders from './pages/Orders';
 
 function App() {
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
+
   return (
     <Router>
       <div className="app-container">
@@ -83,7 +90,9 @@ function App() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>5</span>
               </div>
-              <Moon size={20} style={{ cursor: 'pointer', marginLeft: '12px' }} />
+              <div onClick={() => setIsDark(!isDark)} style={{ cursor: 'pointer', marginLeft: '12px', display: 'flex', alignItems: 'center' }}>
+                {isDark ? <Sun size={20} /> : <Moon size={20} />}
+              </div>
               <div style={{ marginLeft: '12px', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                 <Users size={16} />
               </div>
