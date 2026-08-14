@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Search, Filter, Plus, ShoppingBag, Package, Clock, XCircle, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Filter, Plus, ShoppingBag, Package, Clock, XCircle, Eye, ChevronLeft, ChevronRight, Trash2, PlusSquare } from 'lucide-react';
+import { placeOrder, getOrderDetails, getMedicines } from '../services/api';
 
 // Mock Data matching the mockup
 const mockOrders = [
@@ -11,12 +12,21 @@ const mockOrders = [
 ];
 
 export default function Orders() {
-  const [stats] = useState({
+  const [orders, setOrders] = useState(mockOrders);
+
+  const [stats, setStats] = useState({
     total: 320,
     delivered: 180,
     processing: 95,
     cancelled: 45
   });
+
+  const [showNewOrder, setShowNewOrder] = useState(false);
+  const [newCustomer, setNewCustomer] = useState('');
+  const [medicines, setMedicines] = useState([]);
+  const [lineItems, setLineItems] = useState([{ medicine_id: '', quantity: 1 }]);
+  const [viewDetails, setViewDetails] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const getStatusBadge = (status) => {
     switch(status) {
@@ -37,6 +47,87 @@ export default function Orders() {
     }
   };
 
+  const handleOpenNew = () => setShowNewOrder(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const resp = await getMedicines();
+        if (!mounted) return;
+        setMedicines(resp.data || []);
+      } catch (err) {
+        console.error('Failed to load medicines', err);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const addLineItem = () => setLineItems(prev => [...prev, { medicine_id: '', quantity: 1 }]);
+  const removeLineItem = (idx) => setLineItems(prev => prev.filter((_, i) => i !== idx));
+  const updateLineItem = (idx, patch) => setLineItems(prev => prev.map((it, i) => i === idx ? { ...it, ...patch } : it));
+
+  const computeTotals = () => {
+    let total = 0; let itemsCount = 0;
+    for (const it of lineItems) {
+      const m = medicines.find(m => String(m.id) === String(it.medicine_id));
+      const qty = Number(it.quantity) || 0;
+      if (m) total += Number(m.price || 0) * qty;
+      itemsCount += qty;
+    }
+    return { total, itemsCount };
+  };
+
+  const handleSubmitNew = async (e) => {
+    e.preventDefault();
+    const medicine_list = lineItems
+      .map(li => ({ medicine_id: Number(li.medicine_id), quantity: Number(li.quantity) }))
+      .filter(li => li.medicine_id && li.quantity > 0);
+    if (medicine_list.length === 0) { alert('Please add at least one medicine and quantity'); return; }
+
+    setLoading(true);
+    try {
+      const resp = await placeOrder({ customer_name: newCustomer, medicine_list });
+      const data = resp.data;
+      const { total, itemsCount } = computeTotals();
+      const newOrder = {
+        id: `#ORD-${data.order_id}`,
+        customer: newCustomer || 'Guest',
+        date: new Date().toLocaleString(),
+        items: itemsCount,
+        amount: total,
+        status: 'Processing',
+        payment: 'Pending',
+        order_id: data.order_id
+      };
+      setOrders(prev => [newOrder, ...prev]);
+      setStats(prev => ({ ...prev, total: prev.total + 1, processing: prev.processing + 1 }));
+      setShowNewOrder(false);
+      setNewCustomer('');
+      setLineItems([{ medicine_id: '', quantity: 1 }]);
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || err.message || 'Failed to place order');
+    } finally { setLoading(false); }
+  };
+
+  const handleView = async (order) => {
+    // If we have numeric order_id, fetch details; otherwise show summary
+    if (order.order_id) {
+      try {
+        const resp = await getOrderDetails(order.order_id);
+        setViewDetails({ order, rows: resp.data });
+      } catch (err) {
+        console.error(err);
+        alert('Failed to load order details');
+      }
+    } else {
+      setViewDetails({ order, rows: null });
+    }
+  };
+
+  const closeView = () => setViewDetails(null);
+
   return (
     <div>
       <div className="page-header">
@@ -48,7 +139,7 @@ export default function Orders() {
           <button className="btn btn-outline" style={{ backgroundColor: 'white' }}>
             <Filter size={16} /> Filter
           </button>
-          <button className="btn btn-primary">
+          <button className="btn btn-primary" onClick={handleOpenNew}>
             <Plus size={16} /> New Order
           </button>
         </div>
@@ -104,17 +195,17 @@ export default function Orders() {
             </tr>
           </thead>
           <tbody>
-            {mockOrders.map((order, i) => (
+            {orders.map((order, i) => (
               <tr key={i}>
                 <td className="font-semibold text-muted">{order.id}</td>
                 <td className="font-semibold">{order.customer}</td>
                 <td className="text-muted">{order.date}</td>
                 <td className="text-muted">{order.items} items</td>
-                <td>{order.amount.toFixed(2)}</td>
+                <td>{(order.amount || 0).toFixed(2)}</td>
                 <td>{getStatusBadge(order.status)}</td>
                 <td>{getPaymentBadge(order.payment)}</td>
                 <td>
-                  <button className="btn-icon"><Eye size={16} /></button>
+                  <button className="btn-icon" onClick={() => handleView(order)}><Eye size={16} /></button>
                 </td>
               </tr>
             ))}
@@ -138,6 +229,66 @@ export default function Orders() {
           </div>
         </div>
       </div>
+
+      {/* New Order Modal */}
+      {showNewOrder && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>New Order</h3>
+            <form onSubmit={handleSubmitNew}>
+              <div>
+                <label>Customer Name</label>
+                <input value={newCustomer} onChange={e => setNewCustomer(e.target.value)} placeholder="Customer name" />
+              </div>
+              <div>
+                <label>Medicine List (JSON)</label>
+                <textarea value={newItemsText} onChange={e => setNewItemsText(e.target.value)} rows={6} />
+                <div className="text-muted">Example: [&#123;"medicine_id":1,"quantity":2&#125;]</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? 'Placing...' : 'Place Order'}</button>
+                <button type="button" className="btn btn-outline" onClick={() => setShowNewOrder(false)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Details Modal */}
+      {viewDetails && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Order Details - {viewDetails.order.id}</h3>
+            {viewDetails.rows ? (
+              <div>
+                <table>
+                  <thead><tr><th>Medicine</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr></thead>
+                  <tbody>
+                    {viewDetails.rows.map((r, idx) => (
+                      <tr key={idx}>
+                        <td>{r.name}</td>
+                        <td>{r.quantity}</td>
+                        <td>{r.price.toFixed(2)}</td>
+                        <td>{(r.price * r.quantity).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div>
+                <p>Summary:</p>
+                <p>Customer: {viewDetails.order.customer}</p>
+                <p>Items: {viewDetails.order.items}</p>
+                <p>Amount: ₹{(viewDetails.order.amount || 0).toFixed(2)}</p>
+              </div>
+            )}
+            <div style={{ marginTop: 8 }}>
+              <button className="btn btn-primary" onClick={closeView}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

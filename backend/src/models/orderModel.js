@@ -1,7 +1,7 @@
 const pool = require("../config/db");
 const redisClient = require("../config/redis");
 
-const placeOrder = async (userId, medicineList) => {
+const placeOrder = async (userId, medicineList, customerName = null) => {
 
     const client = await pool.connect();
 
@@ -47,11 +47,11 @@ const placeOrder = async (userId, medicineList) => {
 
         const order = await client.query(
 
-            `INSERT INTO orders(user_id,total_price)
-             VALUES($1,$2)
+            `INSERT INTO orders(user_id, customer_name, total_price)
+             VALUES($1,$2,$3)
              RETURNING *`,
 
-            [userId, totalPrice]
+            [userId, customerName, totalPrice]
 
         );
 
@@ -118,6 +118,7 @@ const getOrderDetails = async (orderId) => {
         SELECT
             o.id AS order_id,
             o.user_id,
+            o.customer_name,
             o.total_price,
             o.order_date,
             m.name,

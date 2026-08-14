@@ -7,6 +7,10 @@ function createStubClient() {
         on: () => {},
         connect: async () => {},
         get: noop,
+        set: async (key, value, opts) => {
+            // mimic redis `SET` behavior: return 'OK' when set succeeds
+            return 'OK';
+        },
         setEx: async () => {},
         del: async () => {}
     };

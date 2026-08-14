@@ -29,3 +29,12 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`http://localhost:${PORT}`);
 });
+
+server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use. Stop the other process or set PORT in .env and restart.`);
+        process.exit(1);
+    }
+    console.error('Server error:', err);
+    process.exit(1);
+});

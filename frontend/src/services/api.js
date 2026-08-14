@@ -10,7 +10,9 @@ export const updateStock = (id, stock) => api.put(`/medicines/${id}/stock`, { st
 export const deleteMedicine = (id) => api.delete(`/medicines/${id}`);
 export const updateMedicine = (id, data) => api.put(`/medicines/${id}`, data);
 
-export const placeOrder = (userId, items) => api.post('/orders', { userId, medicineList: items });
+export const placeOrder = ({ user_id = null, customer_name = null, medicine_list = [] }) =>
+  api.post('/orders', { user_id, customer_name, medicine_list });
+
 export const getOrderDetails = (id) => api.get(`/orders/${id}`);
 
 export default api;

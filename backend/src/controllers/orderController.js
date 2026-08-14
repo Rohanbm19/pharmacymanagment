@@ -4,22 +4,26 @@ const placeOrder = async (req, res) => {
 
     try {
 
-        const { user_id, medicine_list } = req.body;
+        // Accept either a user_id (existing user) or a customer_name
+        const { user_id, medicine_list, customer_name } = req.body;
 
-        if (!user_id || !medicine_list || medicine_list.length === 0) {
-
+        if ((!user_id && !customer_name) || !medicine_list || medicine_list.length === 0) {
             return res.status(400).json({
                 message: "Invalid Order"
             });
-
         }
 
+        // pass user_id (may be null) and customer_name to model
         const result = await orderModel.placeOrder(
-            user_id,
-            medicine_list
+            user_id || null,
+            medicine_list,
+            customer_name || null
         );
 
-        res.status(201).json(result);
+        // Attach customer_name to response so frontend can display it even if no user record exists
+        const response = Object.assign({}, result, { customer_name: customer_name || null });
+
+        res.status(201).json(response);
 
     } catch (error) {
 
