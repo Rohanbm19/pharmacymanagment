@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import { Search, Filter, Plus, ShoppingBag, Package, Clock, XCircle, Eye, ChevronLeft, ChevronRight, Trash2, PlusSquare } from 'lucide-react';
-import { placeOrder, getOrderDetails, getMedicines } from '../services/api';
+import { placeOrder, getOrderDetails, getMedicines, getOrders } from '../services/api';
 
 // Mock Data matching the mockup
 const mockOrders = [
@@ -12,13 +13,13 @@ const mockOrders = [
 ];
 
 export default function Orders() {
-  const [orders, setOrders] = useState(mockOrders);
+  const [orders, setOrders] = useState([]);
 
   const [stats, setStats] = useState({
-    total: 320,
-    delivered: 180,
-    processing: 95,
-    cancelled: 45
+    total: 0,
+    delivered: 0,
+    processing: 0,
+    cancelled: 0
   });
 
   const [showNewOrder, setShowNewOrder] = useState(false);
@@ -27,6 +28,11 @@ export default function Orders() {
   const [lineItems, setLineItems] = useState([{ medicine_id: '', quantity: 1 }]);
   const [viewDetails, setViewDetails] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const resetNewOrderForm = () => {
+    setNewCustomer('');
+    setLineItems([{ medicine_id: '', quantity: 1 }]);
+  };
 
   const getStatusBadge = (status) => {
     switch(status) {
@@ -49,18 +55,63 @@ export default function Orders() {
 
   const handleOpenNew = () => setShowNewOrder(true);
 
+  const fetchMedicinesLive = async () => {
+    try {
+      const resp = await getMedicines();
+      setMedicines(Array.isArray(resp.data) ? resp.data : resp.data?.medicines || []);
+    } catch (err) {
+      console.error('Failed to load medicines', err);
+    }
+  };
+
+  const fetchOrdersLive = async () => {
+    try {
+      const resp = await getOrders();
+      const rows = Array.isArray(resp.data) ? resp.data : resp.data?.orders || [];
+
+      const mapped = rows.map((order) => ({
+        id: `#ORD-${order.id}`,
+        customer: order.customer || 'Guest',
+        date: order.date ? new Date(order.date).toLocaleString() : 'N/A',
+        items: Number(order.items || 0),
+        amount: Number(order.amount || 0),
+        status: order.status || 'Processing',
+        payment: order.payment || 'Pending',
+        order_id: order.id
+      }));
+
+      setOrders(mapped);
+      setStats({
+        total: rows.length,
+        delivered: rows.filter(o => String(o.status).toLowerCase() === 'delivered').length,
+        processing: rows.filter(o => String(o.status).toLowerCase() === 'processing').length,
+        cancelled: rows.filter(o => String(o.status).toLowerCase() === 'cancelled').length
+      });
+    } catch (err) {
+      console.error('Failed to load orders', err);
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
-    (async () => {
-      try {
-        const resp = await getMedicines();
-        if (!mounted) return;
-        setMedicines(resp.data || []);
-      } catch (err) {
-        console.error('Failed to load medicines', err);
-      }
-    })();
-    return () => { mounted = false; };
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001');
+
+    const loadData = async () => {
+      if (!mounted) return;
+      await fetchMedicinesLive();
+      await fetchOrdersLive();
+    };
+
+    loadData();
+
+    socket.on('connect', () => console.log('Orders socket connected'));
+    socket.on('orders:updated', loadData);
+    socket.on('medicines:updated', loadData);
+
+    return () => {
+      mounted = false;
+      socket.disconnect();
+    };
   }, []);
 
   const addLineItem = () => setLineItems(prev => [...prev, { medicine_id: '', quantity: 1 }]);
@@ -80,31 +131,27 @@ export default function Orders() {
 
   const handleSubmitNew = async (e) => {
     e.preventDefault();
+
+    if (!newCustomer.trim()) {
+      alert('Please enter a customer name');
+      return;
+    }
+
     const medicine_list = lineItems
       .map(li => ({ medicine_id: Number(li.medicine_id), quantity: Number(li.quantity) }))
       .filter(li => li.medicine_id && li.quantity > 0);
-    if (medicine_list.length === 0) { alert('Please add at least one medicine and quantity'); return; }
+
+    if (medicine_list.length === 0) {
+      alert('Please add at least one medicine and quantity');
+      return;
+    }
 
     setLoading(true);
     try {
-      const resp = await placeOrder({ customer_name: newCustomer, medicine_list });
-      const data = resp.data;
-      const { total, itemsCount } = computeTotals();
-      const newOrder = {
-        id: `#ORD-${data.order_id}`,
-        customer: newCustomer || 'Guest',
-        date: new Date().toLocaleString(),
-        items: itemsCount,
-        amount: total,
-        status: 'Processing',
-        payment: 'Pending',
-        order_id: data.order_id
-      };
-      setOrders(prev => [newOrder, ...prev]);
-      setStats(prev => ({ ...prev, total: prev.total + 1, processing: prev.processing + 1 }));
+      await placeOrder({ customer_name: newCustomer.trim(), medicine_list });
       setShowNewOrder(false);
-      setNewCustomer('');
-      setLineItems([{ medicine_id: '', quantity: 1 }]);
+      resetNewOrderForm();
+      await fetchOrdersLive();
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.message || err.message || 'Failed to place order');
@@ -232,22 +279,89 @@ export default function Orders() {
 
       {/* New Order Modal */}
       {showNewOrder && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h3>New Order</h3>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="card" style={{ width: '720px', maxWidth: '100%', backgroundColor: 'white', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>New Order</h3>
+              <button type="button" className="btn btn-outline" onClick={() => setShowNewOrder(false)}>Close</button>
+            </div>
+
             <form onSubmit={handleSubmitNew}>
-              <div>
+              <div style={{ marginBottom: 16 }}>
                 <label>Customer Name</label>
-                <input value={newCustomer} onChange={e => setNewCustomer(e.target.value)} placeholder="Customer name" />
+                <input
+                  value={newCustomer}
+                  onChange={e => setNewCustomer(e.target.value)}
+                  placeholder="Customer name"
+                  style={{ width: '100%' }}
+                />
               </div>
-              <div>
-                <label>Medicine List (JSON)</label>
-                <textarea value={newItemsText} onChange={e => setNewItemsText(e.target.value)} rows={6} />
-                <div className="text-muted">Example: [&#123;"medicine_id":1,"quantity":2&#125;]</div>
+
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <label style={{ margin: 0 }}>Medicines</label>
+                  <button type="button" className="btn btn-outline" onClick={addLineItem}>
+                    <PlusSquare size={14} /> Add Medicine
+                  </button>
+                </div>
+
+                {lineItems.map((item, idx) => {
+                  const selectedMedicine = medicines.find(m => String(m.id) === String(item.medicine_id));
+                  const itemTotal = selectedMedicine ? Number(selectedMedicine.price || 0) * Number(item.quantity || 0) : 0;
+
+                  return (
+                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 120px 140px 40px', gap: 10, marginBottom: 10, alignItems: 'center' }}>
+                      <select
+                        value={item.medicine_id}
+                        onChange={e => updateLineItem(idx, { medicine_id: e.target.value })}
+                      >
+                        <option value="">Select medicine</option>
+                        {medicines.map(med => (
+                          <option key={med.id} value={med.id}>{med.name} - ₹{Number(med.price || 0).toFixed(2)}</option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={e => updateLineItem(idx, { quantity: Number(e.target.value) || 1 })}
+                      />
+
+                      <div style={{ textAlign: 'right', fontWeight: 600 }}>
+                        ₹{itemTotal.toFixed(2)}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn-icon"
+                        onClick={() => removeLineItem(idx)}
+                        disabled={lineItems.length === 1}
+                        title="Remove item"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? 'Placing...' : 'Place Order'}</button>
-                <button type="button" className="btn btn-outline" onClick={() => setShowNewOrder(false)}>Cancel</button>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '12px 0', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
+                <div>
+                  <strong>{computeTotals().itemsCount} items</strong>
+                </div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                  Total: ₹{computeTotals().total.toFixed(2)}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-outline" onClick={() => { setShowNewOrder(false); resetNewOrderForm(); }}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" type="submit" disabled={loading}>
+                  {loading ? 'Placing...' : 'Place Order'}
+                </button>
               </div>
             </form>
           </div>
@@ -256,8 +370,8 @@ export default function Orders() {
 
       {/* View Details Modal */}
       {viewDetails && (
-        <div className="modal-overlay">
-          <div className="modal">
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="card" style={{ width: '640px', maxWidth: '100%', backgroundColor: 'white', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3>Order Details - {viewDetails.order.id}</h3>
             {viewDetails.rows ? (
               <div>

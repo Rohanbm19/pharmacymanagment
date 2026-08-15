@@ -20,6 +20,10 @@ const placeOrder = async (req, res) => {
             customer_name || null
         );
 
+        if (global.io) {
+            global.io.emit('orders:updated', { action: 'create', order_id: result.order_id });
+        }
+
         // Attach customer_name to response so frontend can display it even if no user record exists
         const response = Object.assign({}, result, { customer_name: customer_name || null });
 
@@ -36,6 +40,17 @@ const placeOrder = async (req, res) => {
     }
 
 };
+
+const getOrders = async (req, res) => {
+    try {
+        const orders = await orderModel.getOrders();
+        res.json(orders);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
 const getOrderDetails = async (req, res) => {
 
     try {
@@ -68,5 +83,6 @@ const getOrderDetails = async (req, res) => {
 
 module.exports = {
     placeOrder,
+    getOrders,
     getOrderDetails
 };

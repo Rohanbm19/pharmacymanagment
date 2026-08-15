@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
-import { getMedicines } from '../services/api';
+import { getMedicines, getOrders } from '../services/api';
 import { ShoppingBag, ShoppingCart, Pill, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
@@ -34,31 +35,65 @@ const mockRecentOrders = [
 export default function Dashboard() {
   const navigate = useNavigate();
   const [medicines, setMedicines] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
   const [stats, setStats] = useState({
-    totalMedicines: 1245,
-    lowStock: 23,
-    totalSales: '1,24,580',
-    totalOrders: 320
+    totalMedicines: 0,
+    lowStock: 0,
+    totalSales: '0',
+    totalOrders: 0
   });
-
-  useEffect(() => {
-    fetchMedicines();
-  }, []);
 
   const fetchMedicines = async () => {
     try {
       const response = await getMedicines();
-      const meds = response.data.medicines || response.data || [];
+      const meds = response.data || [];
       setMedicines(meds);
-      
-      const totalMedicines = meds.length > 0 ? meds.length : 1245; // fallback to mock if empty
-      const lowStock = meds.filter(m => m.stock < 10).length || 23;
-      
+
+      const totalMedicines = meds.length;
+      const lowStock = meds.filter(m => Number(m.stock) < 10).length;
+
       setStats(prev => ({ ...prev, totalMedicines, lowStock }));
     } catch (error) {
       console.error('Failed to fetch dashboard stats', error);
     }
   };
+
+  const fetchOrders = async () => {
+    try {
+      const response = await getOrders();
+      const rows = Array.isArray(response.data) ? response.data : response.data?.orders || [];
+      const mapped = rows.slice(0, 5).map((order) => ({
+        id: `#ORD-${order.id}`,
+        customer: order.customer || 'Guest',
+        date: order.date ? new Date(order.date).toLocaleString() : 'N/A',
+        amount: Number(order.amount || 0),
+        status: order.status || 'Processing'
+      }));
+
+      setRecentOrders(mapped);
+      setStats(prev => ({ ...prev, totalOrders: rows.length, totalSales: rows.reduce((sum, order) => sum + Number(order.amount || 0), 0).toLocaleString('en-IN') }));
+    } catch (error) {
+      console.error('Failed to fetch recent orders', error);
+    }
+  };
+
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001');
+
+    const refreshData = async () => {
+      await fetchMedicines();
+      await fetchOrders();
+    };
+
+    refreshData();
+
+    socket.on('connect', () => console.log('Dashboard socket connected'));
+    socket.on('medicines:updated', refreshData);
+    socket.on('orders:updated', refreshData);
+    socket.on('lowStock', refreshData);
+
+    return () => socket.disconnect();
+  }, []);
 
   const getStatusBadge = (status) => {
     switch(status) {
@@ -139,7 +174,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {mockRecentOrders.map((order, i) => (
+                  {recentOrders.map((order, i) => (
                     <tr key={i}>
                       <td className="font-semibold text-muted">{order.id}</td>
                       <td className="font-semibold">{order.customer}</td>

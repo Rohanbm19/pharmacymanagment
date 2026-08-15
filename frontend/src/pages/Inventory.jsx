@@ -14,7 +14,7 @@ export default function Inventory() {
   useEffect(() => {
     fetchMedicines();
 
-    const socket = io('http://localhost:5000');
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001');
 
     socket.on('connect', () => {
       console.log('Socket connected:', socket.id);
@@ -22,6 +22,10 @@ export default function Inventory() {
 
     socket.on('medicines:updated', (payload) => {
       console.log('medicines:updated', payload);
+      fetchMedicines();
+    });
+
+    socket.on('orders:updated', () => {
       fetchMedicines();
     });
 

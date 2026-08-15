@@ -112,6 +112,27 @@ const placeOrder = async (userId, medicineList, customerName = null) => {
     }
 
 };
+const getOrders = async () => {
+    const query = `
+        SELECT
+            o.id,
+            o.customer_name AS customer,
+            o.order_date AS date,
+            o.status,
+            o.total_price AS amount,
+            COALESCE(SUM(oi.quantity), 0) AS items,
+            'Pending' AS payment
+        FROM orders o
+        LEFT JOIN order_items oi
+            ON o.id = oi.order_id
+        GROUP BY o.id, o.customer_name, o.order_date, o.status, o.total_price
+        ORDER BY o.order_date DESC;
+    `;
+
+    const result = await pool.query(query);
+    return result.rows;
+};
+
 const getOrderDetails = async (orderId) => {
 
     const query = `
@@ -144,5 +165,6 @@ const getOrderDetails = async (orderId) => {
 
 module.exports = {
     placeOrder,
+    getOrders,
     getOrderDetails
 };
