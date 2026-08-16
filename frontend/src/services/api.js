@@ -32,4 +32,9 @@ export const placeOrder = ({ user_id = null, customer_name = null, medicine_list
 
 export const getOrderDetails = (id) => api.get(`/orders/${id}`);
 
+export const getAIRecommendations = async (payload = {}) => {
+  const response = await api.post('/ai/recommendations', payload);
+  return response;
+};
+
 export default api;

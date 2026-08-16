@@ -7,6 +7,7 @@ import {
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Orders from './pages/Orders';
+import AIRecommendations from './pages/AIRecommendations';
 
 function App() {
   const [isDark, setIsDark] = useState(false);
@@ -51,7 +52,7 @@ function App() {
             <NavLink to="/orders" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
               <ShoppingCart size={20} /> Orders
             </NavLink>
-            <NavLink to="/ai" className="nav-item" onClick={e => e.preventDefault()}>
+            <NavLink to="/ai" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
               <Activity size={20} /> AI Recommendations
             </NavLink>
             <NavLink to="/settings" className="nav-item" onClick={e => e.preventDefault()}>
@@ -106,6 +107,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/inventory" element={<Inventory />} />
               <Route path="/orders" element={<Orders />} />
+              <Route path="/ai" element={<AIRecommendations />} />
             </Routes>
           </main>
         </div>

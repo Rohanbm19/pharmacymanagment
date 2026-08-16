@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { generateInsight } = require('../controllers/aiController');
+const { generateInsight, generateRecommendations } = require('../controllers/aiController');
 
 router.post('/insight', generateInsight);
+router.post('/recommendations', generateRecommendations);
 
 module.exports = router;
