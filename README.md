@@ -1,6 +1,6 @@
 # Pharmacy Management System
 
-An inventory and order management application for a pharmacy. The project contains a React/Vite dashboard, an Express API, PostgreSQL persistence, Redis-based coordination, Socket.IO live updates, and an AI recommendation endpoint.
+An inventory and order management application for a pharmacy. The project contains a React/Vite dashboard, an Express API backed by Supabase, optional Redis caching, Socket.IO live updates, and an AI recommendation endpoint.
 
 ## Implemented Plan
 
@@ -28,8 +28,7 @@ An inventory and order management application for a pharmacy. The project contai
 - Calculates order totals from current medicine prices.
 - Validates that a customer and at least one medicine are provided.
 - Displays order details by order ID.
-- Uses a PostgreSQL transaction to create the order, add order items, and decrement stock together.
-- Uses a Redis lock to prevent concurrent order processing.
+- Uses a Supabase database function to create the order, add order items, and decrement stock atomically.
 
 ### 4. AI pharmacy assistant
 
@@ -41,10 +40,9 @@ An inventory and order management application for a pharmacy. The project contai
 ### 5. Backend foundation
 
 - Express application with CORS and JSON request parsing.
-- PostgreSQL connection pool through the `pg` package.
-- Redis integration for order locking and cache invalidation.
+- Supabase JavaScript client for database access.
+- Optional Redis caching for medicine reads and cache invalidation.
 - Socket.IO server for real-time client updates.
-- Startup schema checks for required order columns.
 - Central error-handler module and validation middleware hook.
 
 ## Technology Stack
@@ -55,8 +53,8 @@ An inventory and order management application for a pharmacy. The project contai
 | UI | Lucide React, Recharts, CSS |
 | API client | Axios |
 | Backend | Node.js, Express 5 |
-| Database | PostgreSQL |
-| Cache/locking | Redis |
+| Database | Supabase (PostgreSQL) |
+| Cache | Redis (optional) |
 | Live updates | Socket.IO |
 | AI integration | OpenAI package and AI routes |
 
@@ -67,7 +65,7 @@ backend/
 	src/
 		app.js                 Express app and API registration
 		server.js              HTTP and Socket.IO server startup
-		config/                PostgreSQL, Redis, and OpenAI configuration
+		config/                Supabase, Redis, and OpenAI configuration
 		controllers/           Medicine, order, and AI request handlers
 		middleware/             Validation and error handling hooks
 		models/                 Database operations
@@ -139,9 +137,11 @@ The frontend sends `{ "question": "fever", "medicines": [] }` to the recommendat
 
 ### Prerequisites
 
-- Node.js 18 or newer
-- PostgreSQL
-- Redis
+- Node.js 22 or newer
+- A Supabase project
+- Redis (optional)
+
+Run [`supabase_schema.sql`](./supabase_schema.sql) in your Supabase project's SQL Editor to create the required tables and the atomic order function.
 
 ### Backend
 
@@ -153,20 +153,18 @@ npm start
 
 The server listens on `PORT` from `.env`, or port `5000` by default.
 
-Create `backend/.env` with the database and Redis settings used by your local services:
+Create `backend/.env` with your Supabase project URL and service-role key:
 
 ```env
 PORT=5000
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_NAME=pharmacy
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 REDIS_URL=redis://localhost:6379
+USE_REDIS=false
 OPENAI_API_KEY=your_key
 ```
 
-The exact Redis and OpenAI variable names should match the existing files in `backend/src/config/`.
+Use the Supabase **Secret key** (`sb_secret_...`) or legacy `service_role` key for `SUPABASE_SERVICE_ROLE_KEY`; a publishable/anon key will not work because Row Level Security is enabled. Keep this key on the backend only; never put it in a `VITE_` frontend variable. Redis is optional and remains disabled unless `USE_REDIS=true`.
 
 ### Frontend
 
@@ -191,13 +189,13 @@ npm run build
 
 ## Database Model
 
-The implemented order workflow expects these PostgreSQL tables:
+The implemented order workflow expects these Supabase tables:
 
 - `medicines`: medicine name, category, stock, and price.
 - `orders`: user reference, customer name, order date, status, and total price.
 - `order_items`: order-to-medicine relationship and quantity.
 
-On startup, the server ensures `orders.customer_name` and `orders.status` exist and makes `orders.user_id` optional for the current customer-order flow.
+The schema script creates the required columns and `place_order_atomic` RPC. Apply schema changes in the Supabase SQL Editor rather than through application startup.
 
 ## Real-time Events
 
@@ -231,4 +229,3 @@ cd frontend
 npm run lint
 npm run build
 ```
-

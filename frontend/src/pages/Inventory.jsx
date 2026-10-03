@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getMedicines, addMedicine, deleteMedicine, updateMedicine } from '../services/api';
 import { io } from 'socket.io-client';
-import { Plus, Pill, Search, Filter, Edit2, Trash2, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle, Package } from 'lucide-react';
+import { Plus, Pill, Search, Filter, Edit2, Trash2, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 
 export default function Inventory() {
   const [medicines, setMedicines] = useState([]);
@@ -52,10 +52,10 @@ export default function Inventory() {
       setMedicines(meds);
       
       setStats({
-        total: meds.length || 1245,
-        inStock: meds.filter(m => m.stock >= 20).length || 1102,
-        lowStock: meds.filter(m => m.stock > 0 && m.stock < 20).length || 23,
-        outOfStock: meds.filter(m => m.stock === 0).length || 8
+        total: meds.length,
+        inStock: meds.filter(m => m.stock >= 20).length,
+        lowStock: meds.filter(m => m.stock > 0 && m.stock < 20).length,
+        outOfStock: meds.filter(m => m.stock === 0).length
       });
     } catch (error) {
       console.error('Error fetching medicines', error);
@@ -128,11 +128,11 @@ export default function Inventory() {
           <p>Manage your medicines and stock levels</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <div className="search-bar" style={{ width: '250px', backgroundColor: 'white', border: '1px solid var(--border)' }}>
+          <div className="search-bar inventory-search">
             <Search size={16} color="var(--text-muted)" />
             <input type="text" placeholder="Search medicines..." />
           </div>
-          <button className="btn btn-outline" style={{ backgroundColor: 'white' }}>
+          <button className="btn btn-outline">
             <Filter size={16} /> Filter
           </button>
           <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)}>
@@ -244,8 +244,8 @@ export default function Inventory() {
       </div>
 
       {isAddModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="card" style={{ width: '400px', backgroundColor: 'white', padding: '32px' }}>
+        <div className="modal-backdrop">
+          <div className="card modal-card" style={{ width: '400px', maxWidth: '100%', padding: '32px' }}>
             <h2 className="section-title" style={{ marginBottom: '24px' }}>Add Medicine</h2>
             <form onSubmit={handleAddMedicine}>
               <div style={{ marginBottom: '16px' }}>
@@ -274,8 +274,8 @@ export default function Inventory() {
       )}
 
       {isEditModalOpen && editMed && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="card" style={{ width: '400px', backgroundColor: 'white', padding: '32px' }}>
+        <div className="modal-backdrop">
+          <div className="card modal-card" style={{ width: '400px', maxWidth: '100%', padding: '32px' }}>
             <h2 className="section-title" style={{ marginBottom: '24px' }}>Edit Medicine</h2>
             <form onSubmit={handleEditSubmit}>
               <div style={{ marginBottom: '16px' }}>

@@ -1,166 +1,62 @@
-const pool = require("../config/db");
+const supabase = require("../config/db");
 const redisClient = require("../config/redis");
 
 const placeOrder = async (userId, medicineList, customerName = null) => {
+    const { data, error } = await supabase.rpc("place_order_atomic", {
+        p_customer_name: customerName,
+        p_user_id: userId,
+        p_items: medicineList
+    });
+    if (error) throw error;
 
-    const client = await pool.connect();
-
-    try {
-
-        // Simple Redis Lock
-        const lock = await redisClient.set(
-            "order_lock",
-            "locked",
-            {
-                NX: true,
-                EX: 10
-            }
-        );
-
-        if (!lock) {
-            throw new Error("Another order is being processed. Please try again.");
+    if (redisClient.isOpen) {
+        try {
+            await redisClient.del("medicines");
+        } catch (cacheError) {
+            console.error("Redis cache invalidation failed after placing order:", cacheError.message);
         }
-
-        await client.query("BEGIN");
-
-        let totalPrice = 0;
-
-        for (const item of medicineList) {
-
-            const medicineResult = await client.query(
-                "SELECT * FROM medicines WHERE id=$1",
-                [item.medicine_id]
-            );
-
-            if (medicineResult.rows.length === 0) {
-                throw new Error("Medicine not found");
-            }
-
-            const medicine = medicineResult.rows[0];
-
-            if (medicine.stock < item.quantity) {
-                throw new Error(`${medicine.name} is out of stock`);
-            }
-
-            totalPrice += medicine.price * item.quantity;
-        }
-
-        const order = await client.query(
-
-            `INSERT INTO orders(user_id, customer_name, total_price)
-             VALUES($1,$2,$3)
-             RETURNING *`,
-
-            [userId, customerName, totalPrice]
-
-        );
-
-        const orderId = order.rows[0].id;
-
-        for (const item of medicineList) {
-
-            await client.query(
-
-                `INSERT INTO order_items
-                (order_id,medicine_id,quantity)
-                VALUES($1,$2,$3)`,
-
-                [
-                    orderId,
-                    item.medicine_id,
-                    item.quantity
-                ]
-
-            );
-
-            await client.query(
-
-                `UPDATE medicines
-                 SET stock = stock - $1
-                 WHERE id = $2`,
-
-                [
-                    item.quantity,
-                    item.medicine_id
-                ]
-
-            );
-
-        }
-
-        await client.query("COMMIT");
-
-        await redisClient.del("medicines"); // Clear cached medicine list
-        await redisClient.del("order_lock"); // Release lock
-
-        return {
-            message: "Order Placed Successfully",
-            order_id: orderId
-        };
-
-    } catch (error) {
-
-        await client.query("ROLLBACK");
-        await redisClient.del("order_lock");
-
-        throw error;
-
-    } finally {
-
-        client.release();
-
     }
 
+    return data;
 };
-const getOrders = async () => {
-    const query = `
-        SELECT
-            o.id,
-            o.customer_name AS customer,
-            o.order_date AS date,
-            o.status,
-            o.total_price AS amount,
-            COALESCE(SUM(oi.quantity), 0) AS items,
-            'Pending' AS payment
-        FROM orders o
-        LEFT JOIN order_items oi
-            ON o.id = oi.order_id
-        GROUP BY o.id, o.customer_name, o.order_date, o.status, o.total_price
-        ORDER BY o.order_date DESC;
-    `;
 
-    const result = await pool.query(query);
-    return result.rows;
+const getOrders = async () => {
+    const { data, error } = await supabase
+        .from("orders")
+        .select("id, customer_name, order_date, status, total_price, order_items(quantity)")
+        .order("order_date", { ascending: false });
+    if (error) throw error;
+
+    return data.map((order) => ({
+        id: order.id,
+        customer: order.customer_name,
+        date: order.order_date,
+        status: order.status,
+        amount: order.total_price,
+        items: order.order_items.reduce((total, item) => total + item.quantity, 0),
+        payment: "Pending"
+    }));
 };
 
 const getOrderDetails = async (orderId) => {
+    const { data, error } = await supabase
+        .from("orders")
+        .select("id, user_id, customer_name, total_price, order_date, order_items(quantity, medicines(name, price))")
+        .eq("id", orderId)
+        .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
 
-    const query = `
-        SELECT
-            o.id AS order_id,
-            o.user_id,
-            o.customer_name,
-            o.total_price,
-            o.order_date,
-            m.name,
-            oi.quantity,
-            m.price
-        FROM orders o
-        JOIN order_items oi
-            ON o.id = oi.order_id
-        JOIN medicines m
-            ON oi.medicine_id = m.id
-        WHERE o.id = $1;
-    `;
-
-    const result = await pool.query(query, [orderId]);
-
-    if (result.rows.length === 0) {
-        return null;
-    }
-
-    return result.rows;
-
+    return data.order_items.map((item) => ({
+        order_id: data.id,
+        user_id: data.user_id,
+        customer_name: data.customer_name,
+        total_price: data.total_price,
+        order_date: data.order_date,
+        name: item.medicines.name,
+        quantity: item.quantity,
+        price: item.medicines.price
+    }));
 };
 
 module.exports = {

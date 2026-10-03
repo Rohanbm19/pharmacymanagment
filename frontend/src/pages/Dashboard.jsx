@@ -112,7 +112,7 @@ export default function Dashboard() {
           <h1>Dashboard</h1>
           <p>Welcome back! Here's what's happening with your pharmacy.</p>
         </div>
-        <div style={{ backgroundColor: 'white', padding: '8px 16px', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '0.9rem', fontWeight: '500' }}>
+        <div className="date-chip">
           📅 May 25 - May 31, 2025
         </div>
       </div>
@@ -199,7 +199,7 @@ export default function Dashboard() {
             <div>
               {medicines.filter(m => m.stock < 10).map((med, idx, arr) => (
                 <div className="list-item" key={med.id || idx} style={idx === arr.length - 1 ? { borderBottom: 'none' } : {}}>
-                  <div style={{ width: '32px', height: '32px', backgroundColor: '#fff7ed', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px', color: '#ea580c' }}><Pill size={16}/></div>
+                  <div className="low-stock-medicine-icon"><Pill size={16}/></div>
                   <div style={{ flex: 1 }}>
                     <div className="font-semibold" style={{ fontSize: '0.95rem' }}>{med.name}</div>
                     <div className="text-muted text-sm">{med.category}</div>

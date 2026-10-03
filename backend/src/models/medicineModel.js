@@ -1,57 +1,48 @@
-const pool = require("../config/db");
+const supabase = require("../config/db");
 
 const addMedicine = async (name, category, stock, price) => {
-    const query = `
-        INSERT INTO medicines(name, category, stock, price)
-        VALUES($1,$2,$3,$4)
-    `;
-
-    await pool.query(query, [name, category, stock, price]);
+    const { error } = await supabase
+        .from("medicines")
+        .insert({ name, category, stock, price });
+    if (error) throw error;
 };
 
 const updateStock = async (id, stock) => {
-    const query = `
-        UPDATE medicines
-        SET stock = $1
-        WHERE id = $2
-    `;
-
-    await pool.query(query, [stock, id]);
+    const { error } = await supabase
+        .from("medicines")
+        .update({ stock, updated_at: new Date().toISOString() })
+        .eq("id", id);
+    if (error) throw error;
 };
 
 const updateMedicine = async (id, name, category, stock, price) => {
-    const query = `
-        UPDATE medicines
-        SET
-            name = COALESCE($1, name),
-            category = COALESCE($2, category),
-            stock = COALESCE($3, stock),
-            price = COALESCE($4, price)
-        WHERE id = $5
-    `;
+    const updates = Object.fromEntries(
+        Object.entries({ name, category, stock, price }).filter(([, value]) => value != null)
+    );
+    updates.updated_at = new Date().toISOString();
 
-    await pool.query(query, [name, category, stock, price, id]);
+    const { error } = await supabase
+        .from("medicines")
+        .update(updates)
+        .eq("id", id);
+    if (error) throw error;
 };
 
 const getMedicines = async () => {
-
-    const query = `
-        SELECT * FROM medicines
-        ORDER BY id;
-    `;
-
-    const result = await pool.query(query);
-
-    return result.rows;
-
+    const { data, error } = await supabase
+        .from("medicines")
+        .select("*")
+        .order("id", { ascending: true });
+    if (error) throw error;
+    return data;
 };
 
 const deleteMedicine = async (id) => {
-    const query = `
-        DELETE FROM medicines
-        WHERE id = $1
-    `;
-    await pool.query(query, [id]);
+    const { error } = await supabase
+        .from("medicines")
+        .delete()
+        .eq("id", id);
+    if (error) throw error;
 };
 
 module.exports = {

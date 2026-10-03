@@ -117,7 +117,7 @@ const getMedicines = async (req, res) => {
             });
         }
 
-        // Fetch from PostgreSQL
+        // Fetch from Supabase
         const medicines = await medicineModel.getMedicines();
 
         try {
@@ -134,7 +134,7 @@ const getMedicines = async (req, res) => {
         }
 
         res.json({
-            source: "PostgreSQL",
+            source: "Supabase",
             medicines
         });
 

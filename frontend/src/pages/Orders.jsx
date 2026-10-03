@@ -1,16 +1,7 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
-import { Search, Filter, Plus, ShoppingBag, Package, Clock, XCircle, Eye, ChevronLeft, ChevronRight, Trash2, PlusSquare } from 'lucide-react';
+import { Filter, Plus, ShoppingBag, Package, Clock, XCircle, Eye, ChevronLeft, ChevronRight, Trash2, PlusSquare } from 'lucide-react';
 import { placeOrder, getOrderDetails, getMedicines, getOrders } from '../services/api';
-
-// Mock Data matching the mockup
-const mockOrders = [
-  { id: '#ORD-2025-0320', customer: 'Rajesh Kumar', date: 'May 31, 2025, 10:30 AM', items: 5, amount: 2450.00, status: 'Delivered', payment: 'Paid' },
-  { id: '#ORD-2025-0319', customer: 'Priya Sharma', date: 'May 31, 2025, 09:15 AM', items: 3, amount: 1230.00, status: 'Processing', payment: 'Paid' },
-  { id: '#ORD-2025-0318', customer: 'Amit Singh', date: 'May 30, 2025, 06:45 PM', items: 4, amount: 3560.00, status: 'Shipped', payment: 'Paid' },
-  { id: '#ORD-2025-0317', customer: 'Neha Verma', date: 'May 30, 2025, 04:20 PM', items: 2, amount: 850.00, status: 'Processing', payment: 'COD' },
-  { id: '#ORD-2025-0316', customer: 'Suresh Patel', date: 'May 29, 2025, 11:10 AM', items: 6, amount: 1780.00, status: 'Cancelled', payment: 'Refunded' },
-];
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
@@ -28,6 +19,7 @@ export default function Orders() {
   const [lineItems, setLineItems] = useState([{ medicine_id: '', quantity: 1 }]);
   const [viewDetails, setViewDetails] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [orderError, setOrderError] = useState('');
 
   const resetNewOrderForm = () => {
     setNewCustomer('');
@@ -46,14 +38,17 @@ export default function Orders() {
 
   const getPaymentBadge = (payment) => {
     switch(payment) {
-      case 'Paid': return <span className="badge badge-success" style={{ backgroundColor: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>Paid</span>;
-      case 'COD': return <span className="badge badge-warning" style={{ backgroundColor: '#fffbeb', color: '#d97706', border: '1px solid #fef3c7' }}>COD</span>;
-      case 'Refunded': return <span className="badge badge-danger" style={{ backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>Refunded</span>;
+      case 'Paid': return <span className="badge badge-success">Paid</span>;
+      case 'COD': return <span className="badge badge-warning">COD</span>;
+      case 'Refunded': return <span className="badge badge-danger">Refunded</span>;
       default: return <span className="badge">{payment}</span>;
     }
   };
 
-  const handleOpenNew = () => setShowNewOrder(true);
+  const handleOpenNew = () => {
+    setOrderError('');
+    setShowNewOrder(true);
+  };
 
   const fetchMedicinesLive = async () => {
     try {
@@ -114,9 +109,18 @@ export default function Orders() {
     };
   }, []);
 
-  const addLineItem = () => setLineItems(prev => [...prev, { medicine_id: '', quantity: 1 }]);
-  const removeLineItem = (idx) => setLineItems(prev => prev.filter((_, i) => i !== idx));
-  const updateLineItem = (idx, patch) => setLineItems(prev => prev.map((it, i) => i === idx ? { ...it, ...patch } : it));
+  const addLineItem = () => {
+    setOrderError('');
+    setLineItems(prev => [...prev, { medicine_id: '', quantity: 1 }]);
+  };
+  const removeLineItem = (idx) => {
+    setOrderError('');
+    setLineItems(prev => prev.filter((_, i) => i !== idx));
+  };
+  const updateLineItem = (idx, patch) => {
+    setOrderError('');
+    setLineItems(prev => prev.map((it, i) => i === idx ? { ...it, ...patch } : it));
+  };
 
   const computeTotals = () => {
     let total = 0; let itemsCount = 0;
@@ -129,11 +133,13 @@ export default function Orders() {
     return { total, itemsCount };
   };
 
+  const hasAvailableMedicines = medicines.some((medicine) => Number(medicine.stock) > 0);
+
   const handleSubmitNew = async (e) => {
     e.preventDefault();
 
     if (!newCustomer.trim()) {
-      alert('Please enter a customer name');
+      setOrderError('Enter the customer name to continue.');
       return;
     }
 
@@ -141,11 +147,24 @@ export default function Orders() {
       .map(li => ({ medicine_id: Number(li.medicine_id), quantity: Number(li.quantity) }))
       .filter(li => li.medicine_id && li.quantity > 0);
 
-    if (medicine_list.length === 0) {
-      alert('Please add at least one medicine and quantity');
+    if (medicine_list.length !== lineItems.length || medicine_list.length === 0) {
+      setOrderError('Choose a medicine and a valid quantity for every order line.');
       return;
     }
 
+    for (const item of medicine_list) {
+      const medicine = medicines.find((entry) => Number(entry.id) === item.medicine_id);
+      if (!medicine) {
+        setOrderError('One of the selected medicines is no longer available. Refresh the list and try again.');
+        return;
+      }
+      if (item.quantity > Number(medicine.stock)) {
+        setOrderError(`${medicine.name} has only ${medicine.stock} in stock.`);
+        return;
+      }
+    }
+
+    setOrderError('');
     setLoading(true);
     try {
       await placeOrder({ customer_name: newCustomer.trim(), medicine_list });
@@ -154,7 +173,7 @@ export default function Orders() {
       await fetchOrdersLive();
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.message || err.message || 'Failed to place order');
+      setOrderError(err.response?.data?.message || err.message || 'Failed to place order. Please try again.');
     } finally { setLoading(false); }
   };
 
@@ -183,7 +202,7 @@ export default function Orders() {
           <p>Track and manage customer orders</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn btn-outline" style={{ backgroundColor: 'white' }}>
+          <button className="btn btn-outline">
             <Filter size={16} /> Filter
           </button>
           <button className="btn btn-primary" onClick={handleOpenNew}>
@@ -218,7 +237,7 @@ export default function Orders() {
           </div>
         </div>
         <div className="stat-card" style={{ padding: '24px' }}>
-          <div className="icon-box icon-purple" style={{ backgroundColor: '#f3e8ff', color: '#9333ea' }}><XCircle size={24} /></div>
+          <div className="icon-box icon-purple"><XCircle size={24} /></div>
           <div className="stat-content">
             <div className="stat-label">Cancelled</div>
             <div className="stat-value">{stats.cancelled}</div>
@@ -256,12 +275,21 @@ export default function Orders() {
                 </td>
               </tr>
             ))}
+            {orders.length === 0 && (
+              <tr>
+                <td colSpan="8" className="orders-empty-state">
+                  <span className="orders-empty-icon"><ShoppingBag size={22} /></span>
+                  <strong>No orders yet</strong>
+                  <span>Create an order to see it listed here.</span>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
         
         {/* Pagination */}
         <div className="pagination">
-          <div>Showing 1 to {mockOrders.length} of {stats.total} entries</div>
+          <div>Showing {orders.length ? 1 : 0} to {orders.length} of {stats.total} entries</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div className="page-controls">
               <button className="page-btn"><ChevronLeft size={16} /></button>
@@ -279,65 +307,99 @@ export default function Orders() {
 
       {/* New Order Modal */}
       {showNewOrder && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="card" style={{ width: '720px', maxWidth: '100%', backgroundColor: 'white', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>New Order</h3>
-              <button type="button" className="btn btn-outline" onClick={() => setShowNewOrder(false)}>Close</button>
+        <div className="modal-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !loading) setShowNewOrder(false);
+        }}>
+          <div className="card modal-card order-modal">
+            <div className="order-modal-header">
+              <div>
+                <span className="order-modal-kicker">SALES</span>
+                <h2>Create an order</h2>
+                <p>Add a customer and the medicines they need.</p>
+              </div>
+              <button type="button" className="btn btn-outline" onClick={() => setShowNewOrder(false)} disabled={loading}>Close</button>
             </div>
 
-            <form onSubmit={handleSubmitNew}>
-              <div style={{ marginBottom: 16 }}>
-                <label>Customer Name</label>
+            <form className="order-form" onSubmit={handleSubmitNew}>
+              <div className="order-form-section">
+                <label className="order-field-label" htmlFor="order-customer">Customer name</label>
                 <input
+                  id="order-customer"
                   value={newCustomer}
                   onChange={e => setNewCustomer(e.target.value)}
-                  placeholder="Customer name"
-                  style={{ width: '100%' }}
+                  placeholder="e.g. Priya Sharma"
+                  autoComplete="name"
+                  required
                 />
               </div>
 
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <label style={{ margin: 0 }}>Medicines</label>
-                  <button type="button" className="btn btn-outline" onClick={addLineItem}>
-                    <PlusSquare size={14} /> Add Medicine
+              <div className="order-form-section">
+                <div className="order-items-heading">
+                  <div>
+                    <label className="order-field-label">Order items</label>
+                    <span className="order-field-hint">Select medicines and quantities. Price is calculated automatically.</span>
+                  </div>
+                  <button type="button" className="btn btn-outline" onClick={addLineItem} disabled={!hasAvailableMedicines}>
+                    <PlusSquare size={16} /> Add item
                   </button>
                 </div>
+
+                {!hasAvailableMedicines && (
+                  <div className="order-empty-inventory">
+                    <Package size={19} />
+                    <span>No medicines are currently in stock. Update inventory before creating an order.</span>
+                  </div>
+                )}
 
                 {lineItems.map((item, idx) => {
                   const selectedMedicine = medicines.find(m => String(m.id) === String(item.medicine_id));
                   const itemTotal = selectedMedicine ? Number(selectedMedicine.price || 0) * Number(item.quantity || 0) : 0;
+                  const selectedElsewhere = lineItems
+                    .filter((_, lineIndex) => lineIndex !== idx)
+                    .map((line) => String(line.medicine_id));
 
                   return (
-                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 120px 140px 40px', gap: 10, marginBottom: 10, alignItems: 'center' }}>
+                    <div className="order-line" key={idx}>
                       <select
+                        aria-label={`Medicine for item ${idx + 1}`}
                         value={item.medicine_id}
                         onChange={e => updateLineItem(idx, { medicine_id: e.target.value })}
+                        required
                       >
                         <option value="">Select medicine</option>
                         {medicines.map(med => (
-                          <option key={med.id} value={med.id}>{med.name} - ₹{Number(med.price || 0).toFixed(2)}</option>
+                          <option
+                            key={med.id}
+                            value={med.id}
+                            disabled={Number(med.stock) <= 0 || selectedElsewhere.includes(String(med.id))}
+                          >
+                            {med.name} · {med.stock} in stock · ₹{Number(med.price || 0).toFixed(2)}
+                          </option>
                         ))}
                       </select>
 
                       <input
                         type="number"
+                        aria-label={`Quantity for item ${idx + 1}`}
                         min="1"
+                        max={selectedMedicine?.stock}
                         value={item.quantity}
                         onChange={e => updateLineItem(idx, { quantity: Number(e.target.value) || 1 })}
+                        required
                       />
 
-                      <div style={{ textAlign: 'right', fontWeight: 600 }}>
-                        ₹{itemTotal.toFixed(2)}
+                      <div className="order-line-total">
+                        <span>Line total</span>
+                        <strong>₹{itemTotal.toFixed(2)}</strong>
                       </div>
 
                       <button
                         type="button"
-                        className="btn-icon"
+                        className="order-remove-button"
                         onClick={() => removeLineItem(idx)}
                         disabled={lineItems.length === 1}
                         title="Remove item"
+                        aria-label={`Remove item ${idx + 1}`}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -346,21 +408,26 @@ export default function Orders() {
                 })}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '12px 0', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
+              <div className="order-summary">
                 <div>
-                  <strong>{computeTotals().itemsCount} items</strong>
+                  <span className="order-field-hint">Total quantity</span>
+                  <strong>{computeTotals().itemsCount} {computeTotals().itemsCount === 1 ? 'item' : 'items'}</strong>
                 </div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>
-                  Total: ₹{computeTotals().total.toFixed(2)}
+                <div className="order-grand-total">
+                  <span>Order total</span>
+                  <strong>₹{computeTotals().total.toFixed(2)}</strong>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn-outline" onClick={() => { setShowNewOrder(false); resetNewOrderForm(); }}>
+              {orderError && <div className="order-error" role="alert">{orderError}</div>}
+
+              <div className="order-form-actions">
+                <button type="button" className="btn btn-outline" onClick={() => { setShowNewOrder(false); resetNewOrderForm(); setOrderError(''); }} disabled={loading}>
                   Cancel
                 </button>
-                <button className="btn btn-primary" type="submit" disabled={loading}>
-                  {loading ? 'Placing...' : 'Place Order'}
+                <button className="btn btn-primary order-submit" type="submit" disabled={loading || !hasAvailableMedicines}>
+                  <ShoppingBag size={16} />
+                  {loading ? 'Placing order…' : 'Place order'}
                 </button>
               </div>
             </form>
@@ -370,8 +437,8 @@ export default function Orders() {
 
       {/* View Details Modal */}
       {viewDetails && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="card" style={{ width: '640px', maxWidth: '100%', backgroundColor: 'white', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-backdrop">
+          <div className="card modal-card" style={{ width: '640px', maxWidth: '100%', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3>Order Details - {viewDetails.order.id}</h3>
             {viewDetails.rows ? (
               <div>

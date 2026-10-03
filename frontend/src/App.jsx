@@ -1,17 +1,21 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import { 
-  LayoutDashboard, Pill, ShoppingCart, Activity, 
-  Users, Settings, Search, Bell, Moon, Sun 
+  LayoutDashboard, Pill, ShoppingCart, Activity,
+  Users, Settings, Search, Bell, Moon, Sun, AlertTriangle
 } from 'lucide-react';
+import { getMedicines } from './services/api';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Orders from './pages/Orders';
 import AIRecommendations from './pages/AIRecommendations';
 
 function App() {
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('pharmacy-theme') === 'dark');
   const [showProfile, setShowProfile] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [lowStockMedicines, setLowStockMedicines] = useState([]);
   const [profileData, setProfileData] = useState({
     name: 'Admin User',
     email: 'admin@pharmacy.com',
@@ -24,7 +28,35 @@ function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    localStorage.setItem('pharmacy-theme', isDark ? 'dark' : 'light');
   }, [isDark]);
+
+  useEffect(() => {
+    let mounted = true;
+    const refreshLowStock = async () => {
+      try {
+        const response = await getMedicines();
+        if (!mounted) return;
+        setLowStockMedicines(response.data.filter((medicine) => Number(medicine.stock) < 10));
+      } catch (error) {
+        console.error('Failed to load low-stock notifications', error);
+      }
+    };
+
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001');
+    refreshLowStock();
+    socket.on('medicines:updated', refreshLowStock);
+    socket.on('orders:updated', refreshLowStock);
+    socket.on('lowStock', refreshLowStock);
+    socket.on('connect_error', (error) => {
+      console.error('Notification socket connection failed', error.message);
+    });
+
+    return () => {
+      mounted = false;
+      socket.disconnect();
+    };
+  }, []);
 
   return (
     <Router>
@@ -83,21 +115,88 @@ function App() {
               <input type="text" placeholder="Search medicines, orders..." />
             </div>
             <div className="topbar-actions">
-              <div style={{ position: 'relative', cursor: 'pointer' }}>
-                <Bell size={20} />
-                <span style={{
-                  position: 'absolute', top: '-4px', right: '-4px', 
-                  backgroundColor: '#ef4444', color: 'white', fontSize: '10px', 
-                  width: '14px', height: '14px', borderRadius: '50%', 
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>5</span>
+              <div className="notification-wrap">
+                <button
+                  type="button"
+                  className="topbar-icon-button notification-button"
+                  aria-label={`Low stock notifications: ${lowStockMedicines.length}`}
+                  aria-expanded={showNotifications}
+                  onClick={() => setShowNotifications((visible) => !visible)}
+                >
+                  <Bell size={20} />
+                  {lowStockMedicines.length > 0 && (
+                    <span className="notification-count">
+                      {lowStockMedicines.length > 99 ? '99+' : lowStockMedicines.length}
+                    </span>
+                  )}
+                </button>
+                {showNotifications && (
+                  <div className="notification-panel">
+                    <div className="notification-panel-header">
+                      <div>
+                        <strong>Low stock</strong>
+                        <span>{lowStockMedicines.length} medicines need attention</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="notification-close"
+                        aria-label="Close notifications"
+                        onClick={() => setShowNotifications(false)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    {lowStockMedicines.length ? (
+                      <div className="notification-list">
+                        {lowStockMedicines.map((medicine) => (
+                          <NavLink
+                            key={medicine.id}
+                            to="/inventory"
+                            className="notification-item"
+                            onClick={() => setShowNotifications(false)}
+                          >
+                            <span className="notification-warning-icon"><AlertTriangle size={16} /></span>
+                            <span className="notification-medicine">
+                              <strong>{medicine.name}</strong>
+                              <small>{medicine.category || 'Medicine'}</small>
+                            </span>
+                            <span className="notification-stock">{medicine.stock} left</span>
+                          </NavLink>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="notification-empty">
+                        <span className="notification-empty-icon"><Bell size={20} /></span>
+                        <strong>Stock levels look good</strong>
+                        <span>No medicines below 10 units.</span>
+                      </div>
+                    )}
+                    <NavLink
+                      to="/inventory"
+                      className="notification-footer-link"
+                      onClick={() => setShowNotifications(false)}
+                    >
+                      Review inventory
+                    </NavLink>
+                  </div>
+                )}
               </div>
-              <div onClick={() => setIsDark(!isDark)} style={{ cursor: 'pointer', marginLeft: '12px', display: 'flex', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="topbar-icon-button theme-toggle"
+                aria-label={`Switch to ${isDark ? 'light' : 'dark'} theme`}
+                onClick={() => setIsDark(!isDark)}
+              >
                 {isDark ? <Sun size={20} /> : <Moon size={20} />}
-              </div>
-              <div onClick={() => setShowProfile(true)} style={{ marginLeft: '12px', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              </button>
+              <button
+                type="button"
+                className="topbar-icon-button profile-button"
+                aria-label="Open profile"
+                onClick={() => setShowProfile(true)}
+              >
                 <Users size={16} />
-              </div>
+              </button>
             </div>
           </header>
 
@@ -114,8 +213,8 @@ function App() {
 
         {/* Profile Modal */}
         {showProfile && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-            <div className="card" style={{ width: '500px', maxWidth: '100%', backgroundColor: 'white', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="modal-backdrop">
+            <div className="card modal-card" style={{ width: '500px', maxWidth: '100%', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <h2 style={{ margin: 0 }}>My Profile</h2>
                 <button type="button" className="btn btn-outline" onClick={() => setShowProfile(false)}>Close</button>
@@ -164,7 +263,7 @@ function App() {
 
               <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
                 <button className="btn btn-primary" style={{ flex: 1 }}>Edit Profile</button>
-                <button className="btn btn-outline" style={{ flex: 1, backgroundColor: 'white' }}>Change Password</button>
+                <button className="btn btn-outline" style={{ flex: 1 }}>Change Password</button>
               </div>
             </div>
           </div>
