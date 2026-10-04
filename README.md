@@ -10,18 +10,23 @@ An inventory and order management application for a pharmacy. The project contai
 - Loads medicine and order data from the backend.
 - Shows recent orders, low-stock medicines, and top-selling medicine charts.
 - Refreshes dashboard data when medicines, orders, or low-stock events are emitted through Socket.IO.
-- Supports light/dark theme switching and an administrator profile modal.
+- Supports light/dark theme switching and an admin page shortcut.
 
 ### 2. Medicine inventory
 
 - Lists medicines with name, category, company, stock, price, expiry date, and availability status.
 - Classifies stock as `In Stock`, `Low Stock`, or `Out of Stock`.
-- Adds new medicines through a modal form.
-- Edits medicine name, category, stock, and price.
-- Deletes medicines after confirmation.
+- Shows medicine and stock information in a read-only view.
 - Refreshes when inventory or order events are received.
 
-### 3. Order management
+### 3. Supabase administrator access
+
+- The Admin icon opens a Supabase email/password sign-in page.
+- Only users with `app_metadata.role` set to `admin` can manage medicines.
+- The Admin inventory page can add, edit, and delete medicines; regular inventory is read-only.
+- The backend verifies the Supabase access token and admin role on every medicine create, update, and delete request.
+
+### 4. Order management
 
 - Lists orders with customer, date, item count, total amount, status, payment state, and actions.
 - Creates orders for a customer with one or more medicines and quantities.
@@ -30,7 +35,7 @@ An inventory and order management application for a pharmacy. The project contai
 - Displays order details by order ID.
 - Uses a Supabase database function to create the order, add order items, and decrement stock atomically.
 
-### 4. AI pharmacy assistant
+### 5. AI pharmacy assistant
 
 - Provides a chat-style interface for common symptom questions.
 - Sends the question and current medicine list to the recommendation API.
@@ -180,6 +185,33 @@ Set the frontend URLs to match the backend port. The current frontend defaults t
 VITE_API_URL=http://localhost:5000/api
 VITE_SOCKET_URL=http://localhost:5000
 ```
+
+For Supabase admin sign-in, also create `frontend/.env.local`:
+
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_publishable_or_anon_key
+```
+
+Use the Supabase publishable/anon key in the frontend only; never expose `SUPABASE_SERVICE_ROLE_KEY` there. Create administrator accounts in Supabase Auth, then set `app_metadata` to `{"role":"admin"}` for each approved user with the Admin API from a trusted backend environment (use the user ID shown under Supabase Auth → Users):
+
+```js
+const supabase = require('./src/config/db');
+
+async function grantAdmin(userId) {
+  const { error } = await supabase.auth.admin.updateUserById(userId, {
+    app_metadata: { role: 'admin' }
+  });
+  if (error) throw error;
+}
+
+grantAdmin('<AUTH_USER_ID>').catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+```
+
+Do not set this role in user-editable `user_metadata`. Sign out and back in after changing a user's role so the session receives updated claims. The backend rejects medicine create, update, or delete requests unless the bearer token resolves to a user with this admin role.
 
 For a production build:
 

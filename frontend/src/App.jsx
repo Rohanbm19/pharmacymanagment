@@ -3,28 +3,22 @@ import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react
 import { io } from 'socket.io-client';
 import { 
   LayoutDashboard, Pill, ShoppingCart, Activity,
-  Users, Settings, Search, Bell, Moon, Sun, AlertTriangle
+  ShieldCheck, Settings, Search, Bell, Moon, Sun, AlertTriangle
 } from 'lucide-react';
 import { getMedicines } from './services/api';
+import supabase from './services/supabase';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Orders from './pages/Orders';
 import AIRecommendations from './pages/AIRecommendations';
+import Admin from './pages/Admin';
 
 function App() {
   const [isDark, setIsDark] = useState(() => localStorage.getItem('pharmacy-theme') === 'dark');
-  const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [lowStockMedicines, setLowStockMedicines] = useState([]);
-  const [profileData, setProfileData] = useState({
-    name: 'Admin User',
-    email: 'admin@pharmacy.com',
-    phone: '+91 98765 43210',
-    address: '123 Pharmacy Street, Medical City, India',
-    pharmacy_name: 'MediCare Pharmacy',
-    license_number: 'PH-2024-001234',
-    establishment_year: '2020'
-  });
+  const [session, setSession] = useState(null);
+  const [authLoaded, setAuthLoaded] = useState(!supabase);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
@@ -55,6 +49,34 @@ function App() {
     return () => {
       mounted = false;
       socket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+
+    let mounted = true;
+    const loadSession = async () => {
+      try {
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (mounted) setSession(currentSession);
+      } catch (error) {
+        console.error('Failed to load Supabase session', error);
+      } finally {
+        if (mounted) setAuthLoaded(true);
+      }
+    };
+
+    loadSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setAuthLoaded(true);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -93,15 +115,13 @@ function App() {
           </div>
           
           <div className="sidebar-footer">
-            <div className="user-profile" onClick={() => setShowProfile(true)} style={{ cursor: 'pointer' }}>
-              <div className="user-avatar">
-                <img src="https://ui-avatars.com/api/?name=Admin+User&background=random" alt="User" style={{width: '100%', height: '100%'}}/>
-              </div>
+            <NavLink to="/admin" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>
+              <ShieldCheck size={20} />
               <div className="user-info">
-                <span className="user-name">Admin User</span>
-                <span className="user-email">admin@pharmacy.com</span>
+                <span className="user-name">Admin panel</span>
+                <span className="user-email">Manage inventory</span>
               </div>
-            </div>
+            </NavLink>
           </div>
         </nav>
 
@@ -189,14 +209,14 @@ function App() {
               >
                 {isDark ? <Sun size={20} /> : <Moon size={20} />}
               </button>
-              <button
-                type="button"
+              <NavLink
                 className="topbar-icon-button profile-button"
-                aria-label="Open profile"
-                onClick={() => setShowProfile(true)}
+                aria-label="Open admin page"
+                title="Admin"
+                to="/admin"
               >
-                <Users size={16} />
-              </button>
+                <ShieldCheck size={18} />
+              </NavLink>
             </div>
           </header>
 
@@ -205,69 +225,13 @@ function App() {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/inventory" element={<Inventory />} />
+              <Route path="/admin" element={<Admin session={session} authLoaded={authLoaded} />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/ai" element={<AIRecommendations />} />
             </Routes>
           </main>
         </div>
 
-        {/* Profile Modal */}
-        {showProfile && (
-          <div className="modal-backdrop">
-            <div className="card modal-card" style={{ width: '500px', maxWidth: '100%', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h2 style={{ margin: 0 }}>My Profile</h2>
-                <button type="button" className="btn btn-outline" onClick={() => setShowProfile(false)}>Close</button>
-              </div>
-
-              {/* Profile Avatar */}
-              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                <div style={{ width: '100px', height: '100px', borderRadius: '50%', margin: '0 auto 16px', overflow: 'hidden', border: '3px solid #e2e8f0' }}>
-                  <img src="https://ui-avatars.com/api/?name=Admin+User&background=random&size=100" alt="Profile" style={{ width: '100%', height: '100%' }} />
-                </div>
-                <h3 style={{ margin: '0 0 4px 0' }}>{profileData.name}</h3>
-                <p style={{ margin: 0, color: 'var(--text-muted)' }}>{profileData.pharmacy_name}</p>
-              </div>
-
-              {/* Profile Information */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Full Name</div>
-                  <div style={{ fontWeight: '500' }}>{profileData.name}</div>
-                </div>
-                <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Email</div>
-                  <div style={{ fontWeight: '500' }}>{profileData.email}</div>
-                </div>
-                <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Phone</div>
-                  <div style={{ fontWeight: '500' }}>{profileData.phone}</div>
-                </div>
-                <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Address</div>
-                  <div style={{ fontWeight: '500' }}>{profileData.address}</div>
-                </div>
-                <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Pharmacy Name</div>
-                  <div style={{ fontWeight: '500' }}>{profileData.pharmacy_name}</div>
-                </div>
-                <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px' }}>License Number</div>
-                  <div style={{ fontWeight: '500' }}>{profileData.license_number}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Establishment Year</div>
-                  <div style={{ fontWeight: '500' }}>{profileData.establishment_year}</div>
-                </div>
-              </div>
-
-              <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
-                <button className="btn btn-primary" style={{ flex: 1 }}>Edit Profile</button>
-                <button className="btn btn-outline" style={{ flex: 1 }}>Change Password</button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </Router>
   );

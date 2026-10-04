@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
-import { getMedicines, addMedicine, updateMedicine } from '../services/api';
+import { getMedicines, addMedicine, deleteMedicine, updateMedicine } from '../services/api';
 import { io } from 'socket.io-client';
-import { Plus, Pill, Search, Filter, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { Plus, Pill, Search, Filter, Edit2, Trash2, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 
-export default function Inventory() {
+export default function Inventory({ isAdmin = false, session, onSignOut }) {
   const [medicines, setMedicines] = useState([]);
   const [stats, setStats] = useState({ total: 0, inStock: 0, lowStock: 0, outOfStock: 0 });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newMed, setNewMed] = useState({ name: '', category: '', stock: 0, price: 0 });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editMed, setEditMed] = useState(null);
+  const [inventoryError, setInventoryError] = useState('');
 
   useEffect(() => {
     fetchMedicines();
@@ -50,6 +51,7 @@ export default function Inventory() {
         expiryDate: ['Dec 2025', 'Jan 2026', 'Oct 2025', 'Sep 2025', 'Mar 2026'][i % 5]
       }));
       setMedicines(meds);
+      setInventoryError('');
       
       setStats({
         total: meds.length,
@@ -59,6 +61,7 @@ export default function Inventory() {
       });
     } catch (error) {
       console.error('Error fetching medicines', error);
+      setInventoryError(error.response?.data?.message || 'Failed to load inventory.');
     }
   };
 
@@ -66,12 +69,32 @@ export default function Inventory() {
     e.preventDefault();
     try {
       await addMedicine(newMed);
+      setInventoryError('');
       setIsAddModalOpen(false);
       setNewMed({ name: '', category: '', stock: 0, price: 0 });
       fetchMedicines();
     } catch (error) {
       console.error('Error adding medicine', error);
+      setInventoryError(error.response?.data?.message || 'Failed to add medicine.');
     }
+  };
+
+  const handleDeleteMedicine = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this medicine?')) return;
+
+    try {
+      await deleteMedicine(id);
+      setInventoryError('');
+      fetchMedicines();
+    } catch (error) {
+      console.error('Error deleting medicine', error);
+      setInventoryError(error.response?.data?.message || 'Failed to delete medicine.');
+    }
+  };
+
+  const handleEditClick = (med) => {
+    setEditMed({ ...med });
+    setIsEditModalOpen(true);
   };
 
   const handleEditSubmit = async (e) => {
@@ -83,11 +106,13 @@ export default function Inventory() {
         stock: editMed.stock,
         price: editMed.price
       });
+      setInventoryError('');
       setIsEditModalOpen(false);
       setEditMed(null);
       fetchMedicines();
     } catch (error) {
       console.error('Error updating medicine', error);
+      setInventoryError(error.response?.data?.message || 'Failed to update medicine.');
     }
   };
 
@@ -107,8 +132,8 @@ export default function Inventory() {
     <div>
       <div className="page-header">
         <div className="page-title">
-          <h1>Inventory</h1>
-          <p>Manage your medicines and stock levels</p>
+          <h1>{isAdmin ? 'Admin inventory' : 'Inventory'}</h1>
+          <p>{isAdmin ? 'Add, update, and remove medicines and stock levels' : 'View medicines and current stock levels'}</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <div className="search-bar inventory-search">
@@ -118,11 +143,19 @@ export default function Inventory() {
           <button className="btn btn-outline">
             <Filter size={16} /> Filter
           </button>
-          <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)}>
-            <Plus size={16} /> Add Medicine
-          </button>
+          {isAdmin && (
+            <>
+              <button type="button" className="btn btn-outline" onClick={onSignOut}>
+                Sign out ({session?.user?.email})
+              </button>
+              <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)}>
+                <Plus size={16} /> Add Medicine
+              </button>
+            </>
+          )}
         </div>
       </div>
+      {inventoryError && <p role="alert" style={{ color: '#dc2626', marginTop: '-12px' }}>{inventoryError}</p>}
 
       <div className="stat-cards-grid">
         <div className="stat-card" style={{ padding: '24px' }}>
@@ -170,6 +203,7 @@ export default function Inventory() {
               <th>Price (₹)</th>
               <th>Expiry Date</th>
               <th>Status</th>
+              {isAdmin && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -189,11 +223,23 @@ export default function Inventory() {
                 <td>{Number(med.price).toFixed(2)}</td>
                 <td className="text-muted">{med.expiryDate}</td>
                 <td>{getStatusBadge(med.stock)}</td>
+                {isAdmin && (
+                  <td>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button type="button" className="btn-icon" aria-label={`Edit ${med.name}`} onClick={() => handleEditClick(med)}>
+                        <Edit2 size={16} />
+                      </button>
+                      <button type="button" className="btn-icon btn-icon-danger" aria-label={`Delete ${med.name}`} onClick={() => handleDeleteMedicine(med.id)}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
             {medicines.length === 0 && (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
+                <td colSpan={isAdmin ? 8 : 7} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
                   No medicines found. Add some to your inventory.
                 </td>
               </tr>
@@ -219,7 +265,7 @@ export default function Inventory() {
         </div>
       </div>
 
-      {isAddModalOpen && (
+      {isAdmin && isAddModalOpen && (
         <div className="modal-backdrop">
           <div className="card modal-card" style={{ width: '400px', maxWidth: '100%', padding: '32px' }}>
             <h2 className="section-title" style={{ marginBottom: '24px' }}>Add Medicine</h2>
@@ -249,7 +295,7 @@ export default function Inventory() {
         </div>
       )}
 
-      {isEditModalOpen && editMed && (
+      {isAdmin && isEditModalOpen && editMed && (
         <div className="modal-backdrop">
           <div className="card modal-card" style={{ width: '400px', maxWidth: '100%', padding: '32px' }}>
             <h2 className="section-title" style={{ marginBottom: '24px' }}>Edit Medicine</h2>
