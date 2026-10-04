@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { getMedicines, addMedicine, deleteMedicine, updateMedicine } from '../services/api';
+import { getMedicines, addMedicine, updateMedicine } from '../services/api';
 import { io } from 'socket.io-client';
-import { Plus, Pill, Search, Filter, Edit2, Trash2, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { Plus, Pill, Search, Filter, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 
 export default function Inventory() {
   const [medicines, setMedicines] = useState([]);
@@ -72,23 +72,6 @@ export default function Inventory() {
     } catch (error) {
       console.error('Error adding medicine', error);
     }
-  };
-
-  const handleDeleteMedicine = async (id) => {
-    if (window.confirm("Are you sure you want to delete this medicine?")) {
-      try {
-        await deleteMedicine(id);
-        // server will emit update; fetch to be safe
-        fetchMedicines();
-      } catch (error) {
-        console.error('Error deleting medicine', error);
-      }
-    }
-  };
-
-  const handleEditClick = (med) => {
-    setEditMed({ ...med });
-    setIsEditModalOpen(true);
   };
 
   const handleEditSubmit = async (e) => {
@@ -187,7 +170,6 @@ export default function Inventory() {
               <th>Price (₹)</th>
               <th>Expiry Date</th>
               <th>Status</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -207,17 +189,11 @@ export default function Inventory() {
                 <td>{Number(med.price).toFixed(2)}</td>
                 <td className="text-muted">{med.expiryDate}</td>
                 <td>{getStatusBadge(med.stock)}</td>
-                <td>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="btn-icon" onClick={() => handleEditClick(med)}><Edit2 size={16} /></button>
-                    <button className="btn-icon btn-icon-danger" onClick={() => handleDeleteMedicine(med.id)}><Trash2 size={16} /></button>
-                  </div>
-                </td>
               </tr>
             ))}
             {medicines.length === 0 && (
               <tr>
-                <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
+                <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
                   No medicines found. Add some to your inventory.
                 </td>
               </tr>
